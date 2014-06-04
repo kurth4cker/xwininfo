@@ -66,7 +66,7 @@ PKG_CHECK_MODULES(XWININFO, [xcb >= 1.6] xcb-shape ${xcb_icccm_pc})
 
 # Even when using xcb, xproto is still required for Xfuncproto.h
 # and libX11 headers for cursorfont.h
-PKG_CHECK_MODULES(XLIB, x11 [xproto >= 7.0.17])
+PKG_CHECK_MODULES(XLIB, x11 [xproto >= 7.0.25])
 XWININFO_CFLAGS="${XWININFO_CFLAGS} ${XLIB_CFLAGS}"
 XWININFO_LIBS="${XWININFO_LIBS} ${LIBICONV}"
 

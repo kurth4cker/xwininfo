@@ -278,7 +278,7 @@ static size_t strlcat (char *dst, const char *src, size_t dstsize)
 /*
  * Report the syntax for calling xwininfo:
  */
-_X_NORETURN
+_X_NORETURN _X_COLD
 static void
 usage (void)
 {
@@ -537,6 +537,8 @@ main (int argc, char **argv)
 	    tree = stats = bits = events = wm = size = shape = 1;
 	    continue;
 	}
+	fprintf (stderr, "%s: unrecognized argument %s\n\n",
+		 program_name, argv[i]);
 	usage ();
     }
 
