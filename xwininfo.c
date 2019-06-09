@@ -716,7 +716,7 @@ wm_size_hints_reply (xcb_connection_t *wshr_dpy, xcb_get_property_cookie_t cooki
 		     wm_size_hints_t *hints_return, xcb_generic_error_t **wshr_err)
 {
     xcb_get_property_reply_t *prop = xcb_get_property_reply (wshr_dpy, cookie, wshr_err);
-    int length;
+    size_t length;
 
     if (!prop || (prop->type != XCB_ATOM_WM_SIZE_HINTS) ||
 	(prop->format != 32)) {
@@ -726,7 +726,7 @@ wm_size_hints_reply (xcb_connection_t *wshr_dpy, xcb_get_property_cookie_t cooki
 
     memset (hints_return, 0, sizeof(wm_size_hints_t));
 
-    length = xcb_get_property_value_length(prop);
+    length = (size_t) xcb_get_property_value_length(prop);
     if (length > sizeof(wm_size_hints_t))
 	length = sizeof(wm_size_hints_t);
     memcpy (hints_return, xcb_get_property_value (prop), length);
@@ -1224,7 +1224,7 @@ static const binding _event_mask_names[] = {
 static void
 Display_Event_Mask (long mask)
 {
-    long bit, bit_mask;
+    unsigned long bit, bit_mask;
 
     for (bit=0, bit_mask=1; bit < sizeof(long)*8; bit++, bit_mask <<= 1)
 	if (mask & bit_mask)
@@ -1620,7 +1620,7 @@ wm_hints_reply (xcb_connection_t *whr_dpy, xcb_get_property_cookie_t cookie,
 		wm_hints_t *hints_return, xcb_generic_error_t **whr_err)
 {
     xcb_get_property_reply_t *prop = xcb_get_property_reply (whr_dpy, cookie, whr_err);
-    int length;
+    size_t length;
 
     if (!prop || (prop->type != XCB_ATOM_WM_HINTS) || (prop->format != 32)) {
 	free (prop);
@@ -1629,7 +1629,7 @@ wm_hints_reply (xcb_connection_t *whr_dpy, xcb_get_property_cookie_t cookie,
 
     memset (hints_return, 0, sizeof(wm_hints_t));
 
-    length = xcb_get_property_value_length(prop);
+    length = (size_t) xcb_get_property_value_length(prop);
     if (length > sizeof(wm_hints_t))
 	length = sizeof(wm_hints_t);
     memcpy (hints_return, xcb_get_property_value (prop), length);
@@ -1836,7 +1836,8 @@ static int
 is_valid_utf8 (const char *string, size_t len)
 {
     unsigned long codepoint;
-    int rem, i;
+    int rem;
+    size_t i;
     unsigned char c;
 
     rem = 0;
