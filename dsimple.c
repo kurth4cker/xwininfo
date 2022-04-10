@@ -414,6 +414,8 @@ Window_With_Name (
 
     if (atom_net_wm_name && atom_utf8_string)
 	cookies.get_net_wm_name = xcb_get_net_wm_name (dpy, top);
+    else
+	cookies.get_net_wm_name.sequence = 0;
     cookies.get_wm_name = xcb_icccm_get_wm_name (dpy, top);
     cookies.query_tree = xcb_query_tree (dpy, top);
     xcb_flush (dpy);
