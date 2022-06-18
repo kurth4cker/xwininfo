@@ -1,3 +1,8 @@
+I have just trying something on some projects. I did:
+  * removed autotools support: just simple Makefile
+
+The rest of README is original.
+#############################################
 xwininfo prints information about windows on an X server.
 Various information is displayed depending on which options are selected.
 
@@ -15,4 +20,3 @@ Please submit bug reports and requests to merge patches there.
 For patch submission instructions, see:
 
   https://www.x.org/wiki/Development/Documentation/SubmittingPatches
-
