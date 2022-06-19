@@ -25,7 +25,7 @@
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
 
-extern xcb_window_t Find_Client(xcb_connection_t * dpy, xcb_window_t root,
+extern xcb_window_t find_client(xcb_connection_t * dpy, xcb_window_t root,
 				xcb_window_t target_win);
 
 #endif

@@ -57,10 +57,10 @@ Window_Has_Property(xcb_connection_t * dpy, xcb_window_t win, xcb_atom_t atom)
 /*
  * Check if window is viewable
  */
-static Bool
+static int
 Window_Is_Viewable(xcb_connection_t * dpy, xcb_window_t win)
 {
-    Bool ok = False;
+    int ok = 0;
     xcb_get_window_attributes_cookie_t attr_cookie;
     xcb_get_window_attributes_reply_t *xwa;
 
@@ -207,7 +207,7 @@ Find_Child_At_Pointer(xcb_connection_t * dpy, xcb_window_t win)
  * root.
  */
 xcb_window_t
-Find_Client(xcb_connection_t * dpy, xcb_window_t root, xcb_window_t subwin)
+find_client(xcb_connection_t * dpy, xcb_window_t root, xcb_window_t subwin)
 {
     xcb_window_t *roots;
     unsigned int i, n_roots;

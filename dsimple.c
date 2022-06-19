@@ -236,7 +236,7 @@ xcb_window_t Select_Window(xcb_connection_t *dpy,
     if (!descend || (target_win == root))
 	return (target_win);
 
-    target_win = Find_Client (dpy, root, target_win);
+    target_win = find_client (dpy, root, target_win);
 
     return (target_win);
 }
