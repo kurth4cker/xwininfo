@@ -48,8 +48,6 @@ from The Open Group.
 
 */
 
-#include "config.h"
-
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
 #include <xcb/xcb_icccm.h>

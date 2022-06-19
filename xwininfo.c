@@ -63,8 +63,6 @@ of the copyright holder.
  *		16-Jun-87
  */
 
-#include "config.h"
-
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
 #include <xcb/xcb_icccm.h>
