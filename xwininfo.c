@@ -67,9 +67,7 @@ of the copyright holder.
 
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
-#ifdef USE_XCB_ICCCM
-# include <xcb/xcb_icccm.h>
-#endif
+#include <xcb/xcb_icccm.h>
 #include <xcb/shape.h>
 
 #include <stdio.h>
@@ -83,111 +81,13 @@ of the copyright holder.
 #include <ctype.h>
 #include <errno.h>
 
-#ifndef HAVE_STRNLEN
-#include "strnlen.h"
-#endif
-
 /* Include routines to handle parsing defaults */
 #include "dsimple.h"
 
-typedef struct {
+struct binding {
     long code;
     const char *name;
-} binding;
-
-#ifndef USE_XCB_ICCCM
-/* Once xcb-icccm's API is stable, this should be replaced by
-   xcb_size_hints_t & xcb_size_hints_flags_t */
-typedef struct {
-  /** User specified flags */
-  uint32_t flags;
-  /** User-specified position */
-  int32_t x, y;
-  /** User-specified size */
-  int32_t width, height;
-  /** Program-specified minimum size */
-  int32_t min_width, min_height;
-  /** Program-specified maximum size */
-  int32_t max_width, max_height;
-  /** Program-specified resize increments */
-  int32_t width_inc, height_inc;
-  /** Program-specified minimum aspect ratios */
-  int32_t min_aspect_num, min_aspect_den;
-  /** Program-specified maximum aspect ratios */
-  int32_t max_aspect_num, max_aspect_den;
-  /** Program-specified base size */
-  int32_t base_width, base_height;
-  /** Program-specified window gravity */
-  uint32_t win_gravity;
-} wm_size_hints_t;
-
-# define xcb_size_hints_t wm_size_hints_t
-
-typedef struct {
-  /** Marks which fields in this structure are defined */
-  int32_t flags;
-  /** Does this application rely on the window manager to get keyboard
-      input? */
-  uint32_t input;
-  /** See below */
-  int32_t initial_state;
-  /** Pixmap to be used as icon */
-  xcb_pixmap_t icon_pixmap;
-  /** Window to be used as icon */
-  xcb_window_t icon_window;
-  /** Initial position of icon */
-  int32_t icon_x, icon_y;
-  /** Icon mask bitmap */
-  xcb_pixmap_t icon_mask;
-  /* Identifier of related window group */
-  xcb_window_t window_group;
-} wm_hints_t;
-
-#define xcb_icccm_wm_hints_t wm_hints_t
-
-enum {
-  /* xcb_size_hints_flags_t */
-  XCB_ICCCM_SIZE_HINT_US_POSITION = 1 << 0,
-  XCB_ICCCM_SIZE_HINT_US_SIZE = 1 << 1,
-  XCB_ICCCM_SIZE_HINT_P_POSITION = 1 << 2,
-  XCB_ICCCM_SIZE_HINT_P_SIZE = 1 << 3,
-  XCB_ICCCM_SIZE_HINT_P_MIN_SIZE = 1 << 4,
-  XCB_ICCCM_SIZE_HINT_P_MAX_SIZE = 1 << 5,
-  XCB_ICCCM_SIZE_HINT_P_RESIZE_INC = 1 << 6,
-  XCB_ICCCM_SIZE_HINT_P_ASPECT = 1 << 7,
-  XCB_ICCCM_SIZE_HINT_BASE_SIZE = 1 << 8,
-  XCB_ICCCM_SIZE_HINT_P_WIN_GRAVITY = 1 << 9,
-  /* xcb_wm_state_t */
-  XCB_ICCCM_WM_STATE_WITHDRAWN = 0,
-  XCB_ICCCM_WM_STATE_NORMAL = 1,
-  XCB_ICCCM_WM_STATE_ICONIC = 3,
-  /* xcb_wm_t */
-  XCB_ICCCM_WM_HINT_INPUT = (1L << 0),
-  XCB_ICCCM_WM_HINT_STATE = (1L << 1),
-  XCB_ICCCM_WM_HINT_ICON_PIXMAP = (1L << 2),
-  XCB_ICCCM_WM_HINT_ICON_WINDOW = (1L << 3),
-  XCB_ICCCM_WM_HINT_ICON_POSITION = (1L << 4),
-  XCB_ICCCM_WM_HINT_ICON_MASK = (1L << 5),
-  XCB_ICCCM_WM_HINT_WINDOW_GROUP = (1L << 6),
-  XCB_ICCCM_WM_HINT_X_URGENCY = (1L << 8)
 };
-
-/* Once xcb-icccm's API is stable, these should be replaced by calls to it */
-# define GET_TEXT_PROPERTY(Dpy, Win, Atom) \
-    xcb_get_property (Dpy, False, Win, Atom, XCB_GET_PROPERTY_TYPE_ANY, 0, BUFSIZ)
-# define xcb_icccm_get_wm_name(Dpy, Win) \
-    GET_TEXT_PROPERTY(Dpy, Win, XCB_ATOM_WM_NAME)
-
-# define xcb_icccm_get_wm_class(Dpy, Win) \
-    xcb_get_property (Dpy, False, Win, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 0, BUFSIZ)
-# define xcb_icccm_get_wm_hints(Dpy, Win) \
-    xcb_get_property(Dpy, False, Win, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 0, 9)
-
-# define xcb_icccm_get_wm_size_hints(Dpy, Win, Atom) \
-    xcb_get_property (Dpy, False, Win, Atom, XCB_ATOM_WM_SIZE_HINTS, 0, 18)
-# define xcb_icccm_get_wm_normal_hints(Dpy, Win) \
-    xcb_icccm_get_wm_size_hints(Dpy, Win, XCB_ATOM_WM_NORMAL_HINTS)
-#endif
 
 /* Possibly in xcb-emwh in the future? */
 static xcb_atom_t atom_net_wm_name, atom_utf8_string;
@@ -229,23 +129,22 @@ static char *nscale (int, int, int, char *, size_t);
 static char *xscale (int);
 static char *yscale (int);
 static char *bscale (int);
-int main (int, char **);
-static const char *LookupL (long, const binding *);
-static const char *Lookup (int, const binding *);
-static void Display_Window_Id (struct wininfo *, Bool);
-static void Display_Stats_Info (struct wininfo *);
-static void Display_Bits_Info (struct wininfo *);
-static void Display_Event_Mask (long);
-static void Display_Events_Info (struct wininfo *);
-static void Display_Tree_Info (struct wininfo *, int);
+static const char *LookupL (long, const struct binding *);
+static const char *Lookup (int, const struct binding *);
+static void display_window_id (struct wininfo *, int);
+static void display_stats_info (struct wininfo *);
+static void display_bits_info (struct wininfo *);
+static void display_event_mask (long);
+static void display_events_info (struct wininfo *);
+static void display_tree_info (struct wininfo *, int);
 static void display_tree_info_1 (struct wininfo *, int, int);
-static void Display_Hints (xcb_size_hints_t *);
-static void Display_Size_Hints (struct wininfo *);
-static void Display_Window_Shape (xcb_window_t);
-static void Display_WM_Info (struct wininfo *);
+static void display_hints (xcb_size_hints_t *);
+static void display_size_hints (struct wininfo *);
+static void display_window_shape (xcb_window_t);
+static void display_wm_info (struct wininfo *);
 static void wininfo_wipe (struct wininfo *);
 
-static Bool window_id_format_dec = False;
+static int window_id_format_dec = 0;
 
 #ifdef HAVE_ICONV
 static iconv_t iconv_from_utf8;
@@ -278,7 +177,6 @@ static size_t strlcat (char *dst, const char *src, size_t dstsize)
 /*
  * Report the syntax for calling xwininfo:
  */
-_X_NORETURN _X_COLD
 static void
 usage (void)
 {
@@ -306,7 +204,6 @@ usage (void)
 	     "    -all                  -tree, -stats, -bits, -events, -wm, -size, -shape\n"
 	     "\n",
 	     program_name);
-    exit (1);
 }
 
 /*
@@ -355,7 +252,7 @@ nscale (int n, int np, int nmm, char *nbuf, size_t nbufsize)
 	}
 	if (english) {
 	    double inch_frac;
-	    Bool printed_anything = False;
+	    int printed_anything = 0;
 	    int mi, yar, ft, inr;
 
 	    inch_frac = ((double) n)*(nmm/25.4)/np;
@@ -367,7 +264,7 @@ nscale (int n, int np, int nmm, char *nbuf, size_t nbufsize)
 		s = strlen (nbuf);
 		snprintf (nbuf+s, nbufsize-s, "%d %s(?!?)",
 			  mi, (mi == 1) ? "mile" : "miles");
-		printed_anything = True;
+		printed_anything = 1;
 	    }
 	    if (inr >= YARD) {
 		yar = inr/YARD;
@@ -377,7 +274,7 @@ nscale (int n, int np, int nmm, char *nbuf, size_t nbufsize)
 		s = strlen (nbuf);
 		snprintf (nbuf+s, nbufsize-s, "%d %s",
 			 yar, (yar==1) ? "yard" : "yards");
-		printed_anything = True;
+		printed_anything = 1;
 	    }
 	    if (inr >= FOOT) {
 		ft = inr/FOOT;
@@ -387,7 +284,7 @@ nscale (int n, int np, int nmm, char *nbuf, size_t nbufsize)
 		s = strlen (nbuf);
 		snprintf (nbuf+s, nbufsize-s, "%d %s",
 			 ft, (ft==1) ? "foot" : "feet");
-		printed_anything = True;
+		printed_anything = 1;
 	    }
 	    if (!printed_anything || inch_frac != 0.0 || inr != 0) {
 		if (printed_anything)
@@ -462,11 +359,13 @@ main (int argc, char **argv)
 
     /* Handle our command line arguments */
     for (i = 1; i < argc; i++) {
-	if (!strcmp (argv[i], "-help"))
+	if (!strcmp (argv[i], "-help")) {
 	    usage ();
+	    exit (EXIT_SUCCESS);
+	}
 	if (!strcmp (argv[i], "-display") || !strcmp (argv[i], "-d")) {
 	    if (++i >= argc)
-		Fatal_Error("-display requires argument");
+		fatal_error("-display requires argument");
 	    display_name = argv[i];
 	    continue;
 	}
@@ -476,18 +375,18 @@ main (int argc, char **argv)
 	}
 	if (!strcmp (argv[i], "-id")) {
 	    if (++i >= argc)
-		Fatal_Error("-id requires argument");
+		fatal_error("-id requires argument");
 	    window = strtoul(argv[i], NULL, 0);
 	    continue;
 	}
 	if (!strcmp (argv[i], "-name")) {
 	    if (++i >= argc)
-		Fatal_Error("-name requires argument");
+		fatal_error("-name requires argument");
 	    window_name = argv[i];
 	    continue;
 	}
 	if (!strcmp (argv[i], "-int")) {
-	    window_id_format_dec = True;
+	    window_id_format_dec = 1;
 	    continue;
 	}
 	if (!strcmp (argv[i], "-children")) {
@@ -545,9 +444,10 @@ main (int argc, char **argv)
 	fprintf (stderr, "%s: unrecognized argument %s\n\n",
 		 program_name, argv[i]);
 	usage ();
+	exit (EXIT_FAILURE);
     }
 
-    Setup_Display_And_Screen (display_name, &dpy, &screen);
+    setup_display_and_screen (display_name, &dpy, &screen);
 
     /* preload atoms we may need later */
     Intern_Atom (dpy, "_NET_WM_NAME");
@@ -565,9 +465,9 @@ main (int argc, char **argv)
     if (use_root)
 	window = screen->root;
     else if (window_name) {
-	window = Window_With_Name (dpy, screen->root, window_name);
+	window = window_with_name (dpy, screen->root, window_name);
 	if (!window)
-	    Fatal_Error ("No window with name \"%s\" exists!", window_name);
+	    fatal_error ("No window with name \"%s\" exists!", window_name);
     }
 
     /* If no window selected on command line, let user pick one the hard way */
@@ -578,7 +478,7 @@ main (int argc, char **argv)
 		"          mouse in that window.\n");
 	Intern_Atom (dpy, "_NET_VIRTUAL_ROOTS");
 	Intern_Atom (dpy, "WM_STATE");
-	window = Select_Window (dpy, screen, !frame);
+	window = select_window (dpy, screen, !frame);
     }
 
     /*
@@ -598,9 +498,9 @@ main (int argc, char **argv)
 
 	if (!w->geometry) {
 	    if (err)
-		Print_X_Error (dpy, err);
+		print_x_error (dpy, err);
 
-	    Fatal_Error ("No such window with id %s.", window_id_str (window));
+	    fatal_error ("No such window with id %s.", window_id_str (window));
 	}
     }
 
@@ -623,41 +523,41 @@ main (int argc, char **argv)
     if (wm) {
 	w->hints_cookie = xcb_icccm_get_wm_hints(dpy, window);
 
-	atom_net_wm_desktop = Get_Atom (dpy, "_NET_WM_DESKTOP");
+	atom_net_wm_desktop = get_atom (dpy, "_NET_WM_DESKTOP");
 	if (atom_net_wm_desktop) {
 	    w->wm_desktop_cookie = xcb_get_property
-		(dpy, False, window, atom_net_wm_desktop,
+		(dpy, 0, window, atom_net_wm_desktop,
 		 XCB_ATOM_CARDINAL, 0, 4);
 	}
 
-	atom_net_wm_window_type	= Get_Atom (dpy, "_NET_WM_WINDOW_TYPE");
+	atom_net_wm_window_type	= get_atom (dpy, "_NET_WM_WINDOW_TYPE");
 	if (atom_net_wm_window_type) {
 	    w->wm_window_type_cookie = xcb_get_property
-		(dpy, False, window, atom_net_wm_window_type,
+		(dpy, 0, window, atom_net_wm_window_type,
 		 XCB_ATOM_ATOM, 0, BUFSIZ);
 	}
 
-	atom_net_wm_state = Get_Atom (dpy, "_NET_WM_STATE");
+	atom_net_wm_state = get_atom (dpy, "_NET_WM_STATE");
 	if (atom_net_wm_state) {
 	    w->wm_state_cookie = xcb_get_property
-		(dpy, False, window, atom_net_wm_state,
+		(dpy, 0, window, atom_net_wm_state,
 		 XCB_ATOM_ATOM, 0, BUFSIZ);
 	}
 
-	atom_net_wm_pid	= Get_Atom (dpy, "_NET_WM_PID");
+	atom_net_wm_pid	= get_atom (dpy, "_NET_WM_PID");
 	if (atom_net_wm_pid) {
 	    w->wm_pid_cookie = xcb_get_property
-		(dpy, False, window, atom_net_wm_pid,
+		(dpy, 0, window, atom_net_wm_pid,
 		 XCB_ATOM_CARDINAL, 0, BUFSIZ);
 	    w->wm_client_machine_cookie = xcb_get_property
-		(dpy, False, window, XCB_ATOM_WM_CLIENT_MACHINE,
+		(dpy, 0, window, XCB_ATOM_WM_CLIENT_MACHINE,
 		 XCB_GET_PROPERTY_TYPE_ANY, 0, BUFSIZ);
 	}
 
-	atom_net_frame_extents = Get_Atom (dpy, "_NET_FRAME_EXTENTS");
+	atom_net_frame_extents = get_atom (dpy, "_NET_FRAME_EXTENTS");
 	if (atom_net_frame_extents) {
 	    w->frame_extents_cookie = xcb_get_property
-		(dpy, False, window, atom_net_frame_extents,
+		(dpy, 0, window, atom_net_frame_extents,
 		 XCB_ATOM_CARDINAL, 0, 4 * 4);
 	}
     }
@@ -667,21 +567,21 @@ main (int argc, char **argv)
     xcb_flush (dpy);
 
     printf ("\nxwininfo: Window id: ");
-    Display_Window_Id (w, True);
+    display_window_id (w, 1);
     if (children || tree)
-	Display_Tree_Info (w, tree);
+	display_tree_info (w, tree);
     if (stats)
-	Display_Stats_Info (w);
+	display_stats_info (w);
     if (bits)
-	Display_Bits_Info (w);
+	display_bits_info (w);
     if (events)
-	Display_Events_Info (w);
+	display_events_info (w);
     if (wm)
-	Display_WM_Info (w);
+	display_wm_info (w);
     if (size)
-	Display_Size_Hints (w);
+	display_size_hints (w);
     if (shape)
-	Display_Window_Shape (window);
+	display_window_shape (window);
     printf ("\n");
 
     wininfo_wipe (w);
@@ -703,15 +603,15 @@ fetch_win_attributes (struct wininfo *w)
 	    xcb_get_window_attributes_reply (dpy, w->attr_cookie, &err);
 
 	if (!w->win_attributes) {
-	    Print_X_Error (dpy, err);
-	    Fatal_Error ("Can't get window attributes.");
+	    print_x_error (dpy, err);
+	    fatal_error ("Can't get window attributes.");
 	}
     }
     return w->win_attributes;
 }
 
 #ifndef USE_XCB_ICCCM
-static Bool
+static int
 wm_size_hints_reply (xcb_connection_t *wshr_dpy, xcb_get_property_cookie_t cookie,
 		     wm_size_hints_t *hints_return, xcb_generic_error_t **wshr_err)
 {
@@ -721,7 +621,7 @@ wm_size_hints_reply (xcb_connection_t *wshr_dpy, xcb_get_property_cookie_t cooki
     if (!prop || (prop->type != XCB_ATOM_WM_SIZE_HINTS) ||
 	(prop->format != 32)) {
 	free (prop);
-	return False;
+	return 0;
     }
 
     memset (hints_return, 0, sizeof(wm_size_hints_t));
@@ -732,7 +632,7 @@ wm_size_hints_reply (xcb_connection_t *wshr_dpy, xcb_get_property_cookie_t cooki
     memcpy (hints_return, xcb_get_property_value (prop), length);
 
     free (prop);
-    return True;
+    return 1;
 }
 
 #define xcb_icccm_get_wm_normal_hints_reply wm_size_hints_reply
@@ -767,7 +667,7 @@ fetch_normal_hints (struct wininfo *w, xcb_size_hints_t *hints_return)
 static char _lookup_buffer[100];
 
 static const char *
-LookupL (long code, const binding *table)
+LookupL (long code, const struct binding *table)
 {
     const char *name = NULL;
 
@@ -789,7 +689,7 @@ LookupL (long code, const binding *table)
 }
 
 static const char *
-Lookup (int code, const binding *table)
+Lookup (int code, const struct binding *table)
 {
     return LookupL ((long)code, table);
 }
@@ -801,11 +701,11 @@ Lookup (int code, const binding *table)
  */
 
 static void
-Display_Window_Id (struct wininfo *w, Bool newline_wanted)
+display_window_id (struct wininfo *w, int newline_wanted)
 {
 #ifdef USE_XCB_ICCCM
     xcb_icccm_get_text_property_reply_t wmn_reply;
-    uint8_t got_reply = False;
+    uint8_t got_reply = 0;
 #endif
     xcb_get_property_reply_t *prop;
     const char *wm_name = NULL;
@@ -853,7 +753,7 @@ Display_Window_Id (struct wininfo *w, Bool newline_wanted)
 		print_utf8 (" \"", wm_name, wm_name_len,  "\"");
 	    } else {
 		/* Encodings we don't support, including COMPOUND_TEXT */
-		const char *enc_name = Get_Atom_Name (dpy, wm_name_encoding);
+		const char *enc_name = get_atom_name (dpy, wm_name_encoding);
 		if (enc_name) {
 		    printf (" (name in unsupported encoding %s)", enc_name);
 		} else {
@@ -880,24 +780,24 @@ Display_Window_Id (struct wininfo *w, Bool newline_wanted)
 /*
  * Display Stats on window
  */
-static const binding _window_classes[] = {
+static const struct binding _window_classes[] = {
 	{ XCB_WINDOW_CLASS_INPUT_OUTPUT, "InputOutput" },
 	{ XCB_WINDOW_CLASS_INPUT_ONLY, "InputOnly" },
         { 0, NULL } };
 
-static const binding _map_states[] = {
+static const struct binding _map_states[] = {
 	{ XCB_MAP_STATE_UNMAPPED,	"IsUnMapped" },
 	{ XCB_MAP_STATE_UNVIEWABLE,	"IsUnviewable" },
 	{ XCB_MAP_STATE_VIEWABLE,	"IsViewable" },
 	{ 0, NULL } };
 
-static const binding _backing_store_states[] = {
+static const struct binding _backing_store_states[] = {
 	{ XCB_BACKING_STORE_NOT_USEFUL, "NotUseful" },
 	{ XCB_BACKING_STORE_WHEN_MAPPED,"WhenMapped" },
 	{ XCB_BACKING_STORE_ALWAYS,	"Always" },
 	{ 0, NULL } };
 
-static const binding _bit_gravity_states[] = {
+static const struct binding _bit_gravity_states[] = {
 	{ XCB_GRAVITY_BIT_FORGET,	"ForgetGravity" },
 	{ XCB_GRAVITY_NORTH_WEST,	"NorthWestGravity" },
 	{ XCB_GRAVITY_NORTH,		"NorthGravity" },
@@ -911,7 +811,7 @@ static const binding _bit_gravity_states[] = {
 	{ XCB_GRAVITY_STATIC,		"StaticGravity" },
 	{ 0, NULL }};
 
-static const binding _window_gravity_states[] = {
+static const struct binding _window_gravity_states[] = {
 	{ XCB_GRAVITY_WIN_UNMAP,	"UnmapGravity" },
 	{ XCB_GRAVITY_NORTH_WEST,	"NorthWestGravity" },
 	{ XCB_GRAVITY_NORTH,		"NorthGravity" },
@@ -925,7 +825,7 @@ static const binding _window_gravity_states[] = {
 	{ XCB_GRAVITY_STATIC,		"StaticGravity" },
 	{ 0, NULL }};
 
-static const binding _visual_classes[] = {
+static const struct binding _visual_classes[] = {
 	{ XCB_VISUAL_CLASS_STATIC_GRAY,	"StaticGray" },
 	{ XCB_VISUAL_CLASS_GRAY_SCALE,	"GrayScale" },
 	{ XCB_VISUAL_CLASS_STATIC_COLOR,"StaticColor" },
@@ -939,7 +839,7 @@ static const binding _visual_classes[] = {
  *   window, geometry, attr_cookie, trans_coords_cookie, normal_hints_cookie
  */
 static void
-Display_Stats_Info (struct wininfo *w)
+display_stats_info (struct wininfo *w)
 {
     xcb_translate_coordinates_reply_t *trans_coords;
     xcb_get_window_attributes_reply_t *win_attributes;
@@ -953,7 +853,7 @@ Display_Stats_Info (struct wininfo *w)
     trans_coords =
 	xcb_translate_coordinates_reply (dpy, w->trans_coords_cookie, NULL);
     if (!trans_coords)
-	Fatal_Error ("Can't get translated coordinates.");
+	fatal_error ("Can't get translated coordinates.");
 
     rx = (int16_t)trans_coords->dst_x;
     ry = (int16_t)trans_coords->dst_y;
@@ -1057,8 +957,8 @@ Display_Stats_Info (struct wininfo *w)
 	qt_cookie = xcb_query_tree (dpy, wmframe);
 	tree = xcb_query_tree_reply (dpy, qt_cookie, &err);
 	if (!tree) {
-	    Print_X_Error (dpy, err);
-	    Fatal_Error ("Can't query window tree.");
+	    print_x_error (dpy, err);
+	    fatal_error ("Can't query window tree.");
 	}
 	parent = tree->parent;
 	free (tree);
@@ -1077,8 +977,8 @@ Display_Stats_Info (struct wininfo *w)
 	frame_geometry = xcb_get_geometry_reply (dpy, geom_cookie, &err);
 
 	if (!frame_geometry) {
-	    Print_X_Error (dpy, err);
-	    Fatal_Error ("Can't get frame geometry.");
+	    print_x_error (dpy, err);
+	    fatal_error ("Can't get frame geometry.");
 	}
 	switch (hints.win_gravity) {
 	    case XCB_GRAVITY_NORTH_WEST: case XCB_GRAVITY_SOUTH_WEST:
@@ -1137,7 +1037,7 @@ Display_Stats_Info (struct wininfo *w)
 /*
  * Display bits info:
  */
-static const binding _gravities[] = {
+static const struct binding _gravities[] = {
     /* WARNING: the first two of these have the same value - see code */
 	{ XCB_GRAVITY_WIN_UNMAP,	"UnMapGravity" },
 	{ XCB_GRAVITY_BIT_FORGET,	"ForgetGravity" },
@@ -1153,13 +1053,13 @@ static const binding _gravities[] = {
 	{ XCB_GRAVITY_STATIC,		"StaticGravity" },
 	{ 0, NULL } };
 
-static const binding _backing_store_hint[] = {
+static const struct binding _backing_store_hint[] = {
 	{ XCB_BACKING_STORE_NOT_USEFUL, "NotUseful" },
 	{ XCB_BACKING_STORE_WHEN_MAPPED,"WhenMapped" },
 	{ XCB_BACKING_STORE_ALWAYS,	"Always" },
 	{ 0, NULL } };
 
-static const binding _bool[] = {
+static const struct binding _bool[] = {
 	{ 0, "No" },
 	{ 1, "Yes" },
 	{ 0, NULL } };
@@ -1169,7 +1069,7 @@ static const binding _bool[] = {
  *   window, attr_cookie (or win_attributes)
  */
 static void
-Display_Bits_Info (struct wininfo * w)
+display_bits_info (struct wininfo * w)
 {
     xcb_get_window_attributes_reply_t *win_attributes
 	= fetch_win_attributes (w);
@@ -1193,7 +1093,7 @@ Display_Bits_Info (struct wininfo * w)
 /*
  * Routine to display all events in an event mask
  */
-static const binding _event_mask_names[] = {
+static const struct binding _event_mask_names[] = {
 	{ XCB_EVENT_MASK_KEY_PRESS,		"KeyPress" },
 	{ XCB_EVENT_MASK_KEY_RELEASE,		"KeyRelease" },
 	{ XCB_EVENT_MASK_BUTTON_PRESS,		"ButtonPress" },
@@ -1222,7 +1122,7 @@ static const binding _event_mask_names[] = {
 	{ 0, NULL } };
 
 static void
-Display_Event_Mask (long mask)
+display_event_mask (long mask)
 {
     unsigned long bit, bit_mask;
 
@@ -1240,17 +1140,17 @@ Display_Event_Mask (long mask)
  *   window, attr_cookie (or win_attributes)
  */
 static void
-Display_Events_Info (struct wininfo *w)
+display_events_info (struct wininfo *w)
 {
     xcb_get_window_attributes_reply_t *win_attributes
 	= fetch_win_attributes (w);
 
     printf ("\n");
     printf ("  Someone wants these events:\n");
-    Display_Event_Mask (win_attributes->all_event_masks);
+    display_event_mask (win_attributes->all_event_masks);
 
     printf ("  Do not propagate these events:\n");
-    Display_Event_Mask (win_attributes->do_not_propagate_mask);
+    display_event_mask (win_attributes->do_not_propagate_mask);
 
     printf ("  Override redirection?: %s\n",
 	    Lookup (win_attributes->override_redirect, _bool));
@@ -1269,7 +1169,7 @@ Display_Events_Info (struct wininfo *w)
  * Requires wininfo members initialized: window, tree_cookie
  */
 static void
-Display_Tree_Info (struct wininfo *w, int recurse)
+display_tree_info (struct wininfo *w, int recurse)
 {
     display_tree_info_1 (w, recurse, 0);
 }
@@ -1286,8 +1186,8 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
 
     tree = xcb_query_tree_reply (dpy, w->tree_cookie, &err);
     if (!tree) {
-	Print_X_Error (dpy, err);
-	Fatal_Error ("Can't query window tree.");
+	print_x_error (dpy, err);
+	fatal_error ("Can't query window tree.");
     }
 
     if (level == 0) {
@@ -1302,9 +1202,9 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
 
 	printf ("\n");
 	printf ("  Root window id: ");
-	Display_Window_Id (&rw, True);
+	display_window_id (&rw, 1);
 	printf ("  Parent window id: ");
-	Display_Window_Id (&pw, True);
+	display_window_id (&pw, 1);
     }
 
     num_children = xcb_query_tree_children_length (tree);
@@ -1322,7 +1222,7 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
 	    = calloc (num_children, sizeof(struct wininfo));
 
 	if (children == NULL)
-	    Fatal_Error ("Failed to allocate memory in display_tree_info");
+	    fatal_error ("Failed to allocate memory in display_tree_info");
 
 	for (i = (int)num_children - 1; i >= 0; i--) {
 	    struct wininfo *cw = &children[i];
@@ -1341,7 +1241,7 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
 
 	for (i = (int)num_children - 1; i >= 0; i--) {
 	    struct wininfo *cw = &children[i];
-	    Bool got_wm_class = False;
+	    int got_wm_class = 0;
 	    char *instance_name = NULL, *class_name = NULL;
 	    int instance_name_len, class_name_len;
 #ifdef USE_XCB_ICCCM
@@ -1353,13 +1253,13 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
 
 	    printf ("     ");
 	    for (j = 0; j < level; j++) printf ("   ");
-	    Display_Window_Id (cw, False);
+	    display_window_id (cw, 0);
 	    printf (": (");
 
 #ifdef USE_XCB_ICCCM
 	    if (xcb_icccm_get_wm_class_reply (dpy, cw->wm_class_cookie,
 					&classhint, NULL)) {
-		got_wm_class = True;
+		got_wm_class = 1;
 		instance_name = classhint.instance_name;
 		class_name = classhint.class_name;
 		instance_name_len = strlen(instance_name);
@@ -1381,7 +1281,7 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
 			    (class_name, proplen - (instance_name_len + 1));
 		    } else
 			class_name_len = 0;
-		    got_wm_class = True;
+		    got_wm_class = 1;
 		}
 		else
 		    free (classprop);
@@ -1425,12 +1325,12 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
 		    printf ("  +%d+%d", abs_x - border, abs_y - border);
 		    free (trans_coords);
 		} else if (err) {
-		    Print_X_Error (dpy, err);
+		    print_x_error (dpy, err);
 		}
 
 		free (geometry);
 	    } else if (err) {
-		Print_X_Error (dpy, err);
+		print_x_error (dpy, err);
 	    }
 	    printf ("\n");
 
@@ -1450,7 +1350,7 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
  * Display a set of size hints
  */
 static void
-Display_Hints (xcb_size_hints_t *hints)
+display_hints (xcb_size_hints_t *hints)
 {
     long flags;
 
@@ -1528,7 +1428,7 @@ Display_Hints (xcb_size_hints_t *hints)
  * Display Size Hints info
  */
 static void
-Display_Size_Hints (struct wininfo *w)
+display_size_hints (struct wininfo *w)
 {
     xcb_size_hints_t hints;
 
@@ -1537,20 +1437,20 @@ Display_Size_Hints (struct wininfo *w)
 	printf ("  No normal window size hints defined\n");
     else {
 	printf ("  Normal window size hints:\n");
-	Display_Hints (&hints);
+	display_hints (&hints);
     }
 
     if (!xcb_icccm_get_wm_size_hints_reply (dpy, w->zoom_cookie, &hints, NULL))
 	printf ("  No zoom window size hints defined\n");
     else {
 	printf ("  Zoom window size hints:\n");
-	Display_Hints (&hints);
+	display_hints (&hints);
     }
 }
 
 
 static void
-Display_Window_Shape (xcb_window_t window)
+display_window_shape (xcb_window_t window)
 {
     const xcb_query_extension_reply_t *shape_query;
     xcb_shape_query_extents_cookie_t extents_cookie;
@@ -1567,7 +1467,7 @@ Display_Window_Shape (xcb_window_t window)
 
     if (!extents) {
 	if (err)
-	    Print_X_Error (dpy, err);
+	    print_x_error (dpy, err);
 	else
 	{
 	    printf ("  No window shape defined\n");
@@ -1606,7 +1506,7 @@ Display_Window_Shape (xcb_window_t window)
  * Requires wininfo members initialized:
  *   window, hints_cookie
  */
-static const binding _state_hints[] = {
+static const struct binding _state_hints[] = {
 	{ XCB_ICCCM_WM_STATE_WITHDRAWN, "Withdrawn State" },
 	{ XCB_ICCCM_WM_STATE_NORMAL, "Normal State" },
 	{ XCB_ICCCM_WM_STATE_ICONIC, "Iconic State" },
@@ -1615,7 +1515,7 @@ static const binding _state_hints[] = {
 	{ 0, NULL } };
 
 #ifndef USE_XCB_ICCCM
-static Bool
+static int
 wm_hints_reply (xcb_connection_t *whr_dpy, xcb_get_property_cookie_t cookie,
 		wm_hints_t *hints_return, xcb_generic_error_t **whr_err)
 {
@@ -1624,7 +1524,7 @@ wm_hints_reply (xcb_connection_t *whr_dpy, xcb_get_property_cookie_t cookie,
 
     if (!prop || (prop->type != XCB_ATOM_WM_HINTS) || (prop->format != 32)) {
 	free (prop);
-	return False;
+	return 0;
     }
 
     memset (hints_return, 0, sizeof(wm_hints_t));
@@ -1635,7 +1535,7 @@ wm_hints_reply (xcb_connection_t *whr_dpy, xcb_get_property_cookie_t cookie,
     memcpy (hints_return, xcb_get_property_value (prop), length);
 
     free (prop);
-    return True;
+    return 1;
 }
 
 #define xcb_icccm_get_wm_hints_reply wm_hints_reply
@@ -1644,7 +1544,7 @@ wm_hints_reply (xcb_connection_t *whr_dpy, xcb_get_property_cookie_t cookie,
 static void
 Display_Atom_Name (xcb_atom_t atom, const char *prefix)
 {
-    const char *atom_name = Get_Atom_Name (dpy, atom);
+    const char *atom_name = get_atom_name (dpy, atom);
 
     if (atom_name) {
 	char *friendly_name = get_friendly_name (atom_name, prefix);
@@ -1656,7 +1556,7 @@ Display_Atom_Name (xcb_atom_t atom, const char *prefix)
 }
 
 static void
-Display_WM_Info (struct wininfo *w)
+display_wm_info (struct wininfo *w)
 {
     xcb_icccm_wm_hints_t wmhints;
     long flags;
@@ -1668,7 +1568,7 @@ Display_WM_Info (struct wininfo *w)
     {
 	printf ("  No window manager hints defined\n");
 	if (err)
-	    Print_X_Error (dpy, err);
+	    print_x_error (dpy, err);
 	flags = 0;
     } else
 	flags = wmhints.flags;
@@ -1686,7 +1586,7 @@ Display_WM_Info (struct wininfo *w)
 	iw.wm_name_cookie = xcb_icccm_get_wm_name (dpy, iw.window);
 
 	printf ("      Icon window id: ");
-	Display_Window_Id (&iw, True);
+	display_window_id (&iw, 1);
     }
 
     if (flags & XCB_ICCCM_WM_HINT_ICON_POSITION)
@@ -1789,13 +1689,13 @@ static xcb_get_property_cookie_t
 get_net_wm_name (xcb_connection_t *gnwn_dpy, xcb_window_t win)
 {
     if (!atom_net_wm_name)
-	atom_net_wm_name = Get_Atom (gnwn_dpy, "_NET_WM_NAME");
+	atom_net_wm_name = get_atom (gnwn_dpy, "_NET_WM_NAME");
 
     if (!atom_utf8_string)
-	atom_utf8_string = Get_Atom (gnwn_dpy, "UTF8_STRING");
+	atom_utf8_string = get_atom (gnwn_dpy, "UTF8_STRING");
 
     if (atom_net_wm_name && atom_utf8_string)
-	return xcb_get_property (gnwn_dpy, False, win, atom_net_wm_name,
+	return xcb_get_property (gnwn_dpy, 0, win, atom_net_wm_name,
 				 atom_utf8_string, 0, BUFSIZ);
     else {
 	xcb_get_property_cookie_t dummy = { 0 };
@@ -1910,7 +1810,7 @@ print_utf8 (const char *prefix, const char *u8str, size_t length, const char *su
     }
 
     if (iconv_from_utf8 != (iconv_t) -1) {
-	Bool done = True;
+	int done = 1;
         char *inp = u8str;
 	char convbuf[BUFSIZ];
 	int convres;
@@ -1923,7 +1823,7 @@ print_utf8 (const char *prefix, const char *u8str, size_t length, const char *su
 	    convres = iconv (iconv_from_utf8, &inp, &inlen, &outp, &outlen);
 
 	    if ((convres == -1) && (errno == E2BIG)) {
-		done = False;
+		done = 0;
 		convres = 0;
 	    }
 
@@ -1954,7 +1854,7 @@ get_friendly_name (const char *string, const char *prefix)
 {
     const char *name_start = string;
     char *lowered_name, *n;
-    Bool first = True;
+    int first = 1;
     size_t prefix_len = strlen (prefix);
 
     if (strncmp (name_start, prefix, prefix_len) == 0) {
@@ -1963,14 +1863,14 @@ get_friendly_name (const char *string, const char *prefix)
 
     lowered_name = strdup (name_start);
     if (lowered_name == NULL)
-	Fatal_Error ("Failed to allocate memory in get_friendly_name");
+	fatal_error ("Failed to allocate memory in get_friendly_name");
 
     for (n = lowered_name ; *n != 0 ; n++) {
 	if (*n == '_') {
 	    *n = ' ';
-	    first = True;
+	    first = 1;
 	} else if (first) {
-	    first = False;
+	    first = 0;
 	} else {
 	    *n = tolower((unsigned char)*n);
 	}

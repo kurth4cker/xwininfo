@@ -52,9 +52,7 @@ from The Open Group.
 
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
-#ifdef USE_XCB_ICCCM
-# include <xcb/xcb_icccm.h>
-#endif
+#include <xcb/xcb_icccm.h>
 #include <X11/cursorfont.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,13 +76,13 @@ from The Open Group.
 const char    *program_name = "unknown_program";
 
 /*
- * Get_Display_Name (argc, argv) - return string representing display name
+ * get_display_name (argc, argv) - return string representing display name
  * that would be used given the specified argument (i.e. if it's NULL, check
  * getenv("DISPLAY") - always returns a non-NULL pointer, though it may be
  * an unwritable constant, so is safe to printf() on platforms that crash
  * on NULL printf arguments.
  */
-const char *Get_Display_Name (const char *display_name)
+const char *get_display_name (const char *display_name)
 {
     const char *name = display_name;
 
@@ -98,12 +96,12 @@ const char *Get_Display_Name (const char *display_name)
 
 
 /*
- * Setup_Display_And_Screen: This routine opens up the correct display (i.e.,
- *                           it calls Get_Display_Name) and then stores a
+ * setup_display_and_screen: This routine opens up the correct display (i.e.,
+ *                           it calls get_display_name) and then stores a
  *                           pointer to it in dpy.  The default screen
  *                           for this display is then stored in screen.
  */
-void Setup_Display_And_Screen (
+void setup_display_and_screen (
     const char *display_name,
     xcb_connection_t **dpy,	/* MODIFIED */
     xcb_screen_t **screen)	/* MODIFIED */
@@ -115,18 +113,18 @@ void Setup_Display_And_Screen (
     if ((err = xcb_connection_has_error (*dpy)) != 0) {
         switch (err) {
         case XCB_CONN_CLOSED_MEM_INSUFFICIENT:
-            Fatal_Error ("Failed to allocate memory in xcb_connect");
+            fatal_error ("Failed to allocate memory in xcb_connect");
         case XCB_CONN_CLOSED_PARSE_ERR:
-            Fatal_Error ("unable to parse display name \"%s\"",
-                         Get_Display_Name(display_name) );
+            fatal_error ("unable to parse display name \"%s\"",
+                         get_display_name(display_name) );
 #ifdef XCB_CONN_CLOSED_INVALID_SCREEN
         case XCB_CONN_CLOSED_INVALID_SCREEN:
-            Fatal_Error ("invalid screen %d in display \"%s\"",
-                         screen_number, Get_Display_Name(display_name));
+            fatal_error ("invalid screen %d in display \"%s\"",
+                         screen_number, get_display_name(display_name));
 #endif
         default:
-            Fatal_Error ("unable to open display \"%s\"",
-                         Get_Display_Name(display_name) );
+            fatal_error ("unable to open display \"%s\"",
+                         get_display_name(display_name) );
         }
     }
 
@@ -137,7 +135,7 @@ void Setup_Display_And_Screen (
 	int screen_count = xcb_setup_roots_length(setup);
 	if (screen_count <= screen_number)
 	{
-	    Fatal_Error ("unable to access screen %d, max is %d",
+	    fatal_error ("unable to access screen %d, max is %d",
 			 screen_number, screen_count-1 );
 	}
 
@@ -151,7 +149,7 @@ void Setup_Display_And_Screen (
  * xcb equivalent of XCreateFontCursor
  */
 static xcb_cursor_t
-Create_Font_Cursor (xcb_connection_t *dpy, uint16_t glyph)
+create_font_cursor (xcb_connection_t *dpy, uint16_t glyph)
 {
     static xcb_font_t cursor_font;
     xcb_cursor_t cursor;
@@ -173,7 +171,7 @@ Create_Font_Cursor (xcb_connection_t *dpy, uint16_t glyph)
  * Routine to let user select a window using the mouse
  */
 
-xcb_window_t Select_Window(xcb_connection_t *dpy,
+xcb_window_t select_window(xcb_connection_t *dpy,
 			   const xcb_screen_t *screen,
 			   int descend)
 {
@@ -187,17 +185,17 @@ xcb_window_t Select_Window(xcb_connection_t *dpy,
     xcb_grab_pointer_reply_t *grab_reply;
 
     /* Make the target cursor */
-    cursor = Create_Font_Cursor (dpy, XC_crosshair);
+    cursor = create_font_cursor (dpy, XC_crosshair);
 
     /* Grab the pointer using target cursor, letting it room all over */
     grab_cookie = xcb_grab_pointer
-	(dpy, False, root,
+	(dpy, 1, root,
 	 XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE,
 	 XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC,
 	 root, cursor, XCB_TIME_CURRENT_TIME);
     grab_reply = xcb_grab_pointer_reply (dpy, grab_cookie, &err);
     if (grab_reply->status != XCB_GRAB_STATUS_SUCCESS)
-	Fatal_Error ("Can't grab the mouse.");
+	fatal_error ("Can't grab the mouse.");
 
     /* Let the user select a window... */
     while ((target_win == XCB_WINDOW_NONE) || (buttons != 0)) {
@@ -206,7 +204,7 @@ xcb_window_t Select_Window(xcb_connection_t *dpy,
 	xcb_flush (dpy);
 	event = xcb_wait_for_event (dpy);
 	if (event == NULL)
-	    Fatal_Error ("Fatal IO error");
+	    fatal_error ("Fatal IO error");
 	switch (event->response_type & 0x7f) {
 	case XCB_BUTTON_PRESS:
 	{
@@ -243,7 +241,7 @@ xcb_window_t Select_Window(xcb_connection_t *dpy,
 
 
 /*
- * Window_With_Name: routine to locate a window with a given name on a display.
+ * window_with_name: routine to locate a window with a given name on a display.
  *                   If no window with the given name is found, 0 is returned.
  *                   If more than one window has the given name, the first
  *                   one found will be returned.  Only top and its subwindows
@@ -256,21 +254,15 @@ struct wininfo_cookies {
     xcb_query_tree_cookie_t query_tree;
 };
 
-#ifndef USE_XCB_ICCCM
-# define xcb_icccm_get_wm_name(Dpy, Win) \
-    xcb_get_property (Dpy, False, Win, XCB_ATOM_WM_NAME, \
-		      XCB_GET_PROPERTY_TYPE_ANY, 0, BUFSIZ)
-#endif
-
 static xcb_atom_t atom_net_wm_name, atom_utf8_string;
 
 # define xcb_get_net_wm_name(Dpy, Win)			 \
-    xcb_get_property (Dpy, False, Win, atom_net_wm_name, \
+    xcb_get_property (Dpy, 1, Win, atom_net_wm_name, \
 		      atom_utf8_string, 0, BUFSIZ)
 
 
 static xcb_window_t
-recursive_Window_With_Name  (
+recursive_window_with_name  (
     xcb_connection_t *dpy,
     xcb_window_t window,
     struct wininfo_cookies *cookies,
@@ -303,7 +295,7 @@ recursive_Window_With_Name  (
 	    free (prop);
 	} else if (err) {
 	    if (err->response_type == 0)
-		Print_X_Error (dpy, err);
+		print_x_error (dpy, err);
 	    return 0;
 	}
     }
@@ -343,7 +335,7 @@ recursive_Window_With_Name  (
 #endif
 	else if (err) {
 	    if (err->response_type == 0)
-		Print_X_Error (dpy, err);
+		print_x_error (dpy, err);
 	    return 0;
 	}
     }
@@ -357,7 +349,7 @@ recursive_Window_With_Name  (
     tree = xcb_query_tree_reply (dpy, cookies->query_tree, &err);
     if (!tree) {
 	if (err->response_type == 0)
-	    Print_X_Error (dpy, err);
+	    print_x_error (dpy, err);
 	return 0;
     }
 
@@ -366,7 +358,7 @@ recursive_Window_With_Name  (
     child_cookies = calloc(nchildren, sizeof(struct wininfo_cookies));
 
     if (child_cookies == NULL)
-	Fatal_Error("Failed to allocate memory in recursive_Window_With_Name");
+	fatal_error("Failed to allocate memory in recursive_window_with_name");
 
     for (i = 0; i < nchildren; i++) {
 	if (atom_net_wm_name && atom_utf8_string)
@@ -378,7 +370,7 @@ recursive_Window_With_Name  (
     xcb_flush (dpy);
 
     for (i = 0; i < nchildren; i++) {
-	w = recursive_Window_With_Name (dpy, children[i],
+	w = recursive_window_with_name (dpy, children[i],
 					&child_cookies[i], name, namelen);
 	if (w)
 	    break;
@@ -402,15 +394,15 @@ recursive_Window_With_Name  (
 }
 
 xcb_window_t
-Window_With_Name (
+window_with_name (
     xcb_connection_t *dpy,
     xcb_window_t top,
     const char *name)
 {
     struct wininfo_cookies cookies;
 
-    atom_net_wm_name = Get_Atom (dpy, "_NET_WM_NAME");
-    atom_utf8_string = Get_Atom (dpy, "UTF8_STRING");
+    atom_net_wm_name = get_atom (dpy, "_NET_WM_NAME");
+    atom_utf8_string = get_atom (dpy, "UTF8_STRING");
 
     if (atom_net_wm_name && atom_utf8_string)
 	cookies.get_net_wm_name = xcb_get_net_wm_name (dpy, top);
@@ -419,14 +411,14 @@ Window_With_Name (
     cookies.get_wm_name = xcb_icccm_get_wm_name (dpy, top);
     cookies.query_tree = xcb_query_tree (dpy, top);
     xcb_flush (dpy);
-    return recursive_Window_With_Name(dpy, top, &cookies, name, strlen(name));
+    return recursive_window_with_name(dpy, top, &cookies, name, strlen(name));
 }
 
 
 /*
  * Standard fatal error routine - call like printf
  */
-void Fatal_Error (const char *msg, ...)
+void fatal_error (const char *msg, ...)
 {
     va_list args;
     fflush (stdout);
@@ -443,7 +435,7 @@ void Fatal_Error (const char *msg, ...)
  * Print X error information like the default Xlib error handler
  */
 void
-Print_X_Error (
+print_x_error (
     xcb_connection_t *dpy,
     xcb_generic_error_t *err
     )
@@ -589,7 +581,7 @@ struct atom_cache_entry *Intern_Atom (xcb_connection_t * dpy, const char *name)
     a = calloc(1, sizeof(struct atom_cache_entry));
     if (a != NULL) {
 	a->name = name;
-	a->intern_atom = xcb_intern_atom (dpy, False, strlen (name), (name));
+	a->intern_atom = xcb_intern_atom (dpy, 1, strlen (name), (name));
 	a->next = atom_cache;
 	atom_cache = a;
     }
@@ -597,7 +589,7 @@ struct atom_cache_entry *Intern_Atom (xcb_connection_t * dpy, const char *name)
 }
 
 /* Get an atom by name when it is needed. */
-xcb_atom_t Get_Atom (xcb_connection_t * dpy, const char *name)
+xcb_atom_t get_atom (xcb_connection_t * dpy, const char *name)
 {
     struct atom_cache_entry *a = Intern_Atom (dpy, name);
 
@@ -622,7 +614,7 @@ xcb_atom_t Get_Atom (xcb_connection_t * dpy, const char *name)
 }
 
 /* Get the name for an atom when it is needed. */
-const char *Get_Atom_Name (xcb_connection_t * dpy, xcb_atom_t atom)
+const char *get_atom_name (xcb_connection_t * dpy, xcb_atom_t atom)
 {
     struct atom_cache_entry *a;
 

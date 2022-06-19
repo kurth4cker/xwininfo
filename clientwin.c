@@ -33,13 +33,13 @@ static xcb_atom_t atom_wm_state = XCB_ATOM_NONE;
 /*
  * Check if window has given property
  */
-static Bool
-Window_Has_Property(xcb_connection_t * dpy, xcb_window_t win, xcb_atom_t atom)
+static int
+window_has_property(xcb_connection_t * dpy, xcb_window_t win, xcb_atom_t atom)
 {
     xcb_get_property_cookie_t prop_cookie;
     xcb_get_property_reply_t *prop_reply;
 
-    prop_cookie = xcb_get_property (dpy, False, win, atom,
+    prop_cookie = xcb_get_property (dpy, 0, win, atom,
                                     XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
 
     prop_reply = xcb_get_property_reply (dpy, prop_cookie, NULL);
@@ -48,17 +48,17 @@ Window_Has_Property(xcb_connection_t * dpy, xcb_window_t win, xcb_atom_t atom)
         xcb_atom_t reply_type = prop_reply->type;
         free (prop_reply);
         if (reply_type != XCB_NONE)
-            return True;
+            return 1;
     }
 
-    return False;
+    return 0;
 }
 
 /*
  * Check if window is viewable
  */
 static int
-Window_Is_Viewable(xcb_connection_t * dpy, xcb_window_t win)
+window_is_viewable(xcb_connection_t * dpy, xcb_window_t win)
 {
     int ok = 0;
     xcb_get_window_attributes_cookie_t attr_cookie;
@@ -83,7 +83,7 @@ Window_Is_Viewable(xcb_connection_t * dpy, xcb_window_t win)
  * The first matching window is returned, None if no match is found.
  */
 static xcb_window_t
-Find_Client_In_Children(xcb_connection_t * dpy, xcb_window_t win)
+find_client_in_children(xcb_connection_t * dpy, xcb_window_t win)
 {
     xcb_query_tree_cookie_t qt_cookie;
     xcb_query_tree_reply_t *tree;
@@ -105,12 +105,12 @@ Find_Client_In_Children(xcb_connection_t * dpy, xcb_window_t win)
     /* Check each child for WM_STATE and other validity */
     win = XCB_WINDOW_NONE;
     for (i = (int) n_children - 1; i >= 0; i--) {
-        if (!Window_Is_Viewable(dpy, children[i])) {
+        if (!window_is_viewable(dpy, children[i])) {
             /* Don't bother descending into this one */
             children[i] = XCB_WINDOW_NONE;
             continue;
         }
-        if (!Window_Has_Property(dpy, children[i], atom_wm_state))
+        if (!window_has_property(dpy, children[i], atom_wm_state))
             continue;
 
         /* Got one */
@@ -122,7 +122,7 @@ Find_Client_In_Children(xcb_connection_t * dpy, xcb_window_t win)
     for (i = (int) n_children - 1; i >= 0; i--) {
         if (children[i] == XCB_WINDOW_NONE)
             continue;
-        win = Find_Client_In_Children(dpy, children[i]);
+        win = find_client_in_children(dpy, children[i]);
         if (win != XCB_WINDOW_NONE)
             break;
     }
@@ -137,7 +137,7 @@ Find_Client_In_Children(xcb_connection_t * dpy, xcb_window_t win)
  * Find virtual roots (_NET_VIRTUAL_ROOTS)
  */
 static xcb_window_t *
-Find_Roots(xcb_connection_t * dpy, xcb_window_t root, unsigned int *num)
+find_roots (xcb_connection_t * dpy, xcb_window_t root, unsigned int *num)
 {
     xcb_atom_t atom_virtual_root;
 
@@ -148,11 +148,11 @@ Find_Roots(xcb_connection_t * dpy, xcb_window_t root, unsigned int *num)
 
     *num = 0;
 
-    atom_virtual_root = Get_Atom (dpy, "_NET_VIRTUAL_ROOTS");
+    atom_virtual_root = get_atom (dpy, "_NET_VIRTUAL_ROOTS");
     if (atom_virtual_root == XCB_ATOM_NONE)
         return NULL;
 
-    prop_cookie = xcb_get_property (dpy, False, root, atom_virtual_root,
+    prop_cookie = xcb_get_property (dpy, 0, root, atom_virtual_root,
                                     XCB_ATOM_WINDOW, 0, 0x7fffffff);
     prop_reply = xcb_get_property_reply (dpy, prop_cookie, NULL);
     if (!prop_reply)
@@ -176,7 +176,7 @@ Find_Roots(xcb_connection_t * dpy, xcb_window_t root, unsigned int *num)
  * Find child window at pointer location
  */
 static xcb_window_t
-Find_Child_At_Pointer(xcb_connection_t * dpy, xcb_window_t win)
+find_child_at_pointer(xcb_connection_t * dpy, xcb_window_t win)
 {
     xcb_window_t child_return = XCB_WINDOW_NONE;
 
@@ -214,11 +214,11 @@ find_client(xcb_connection_t * dpy, xcb_window_t root, xcb_window_t subwin)
     xcb_window_t win;
 
     /* Check if subwin is a virtual root */
-    roots = Find_Roots(dpy, root, &n_roots);
+    roots = find_roots(dpy, root, &n_roots);
     for (i = 0; i < n_roots; i++) {
         if (subwin != roots[i])
             continue;
-        win = Find_Child_At_Pointer(dpy, subwin);
+        win = find_child_at_pointer(dpy, subwin);
         if (win == XCB_WINDOW_NONE) {
             free (roots);
             return subwin;      /* No child - Return virtual root. */
@@ -229,17 +229,17 @@ find_client(xcb_connection_t * dpy, xcb_window_t root, xcb_window_t subwin)
     free (roots);
 
     if (atom_wm_state == XCB_ATOM_NONE) {
-        atom_wm_state = Get_Atom(dpy, "WM_STATE");
+        atom_wm_state = get_atom(dpy, "WM_STATE");
         if (atom_wm_state == XCB_ATOM_NONE)
             return subwin;
     }
 
     /* Check if subwin has WM_STATE */
-    if (Window_Has_Property(dpy, subwin, atom_wm_state))
+    if (window_has_property(dpy, subwin, atom_wm_state))
         return subwin;
 
     /* Attempt to find a client window in subwin's children */
-    win = Find_Client_In_Children(dpy, subwin);
+    win = find_client_in_children(dpy, subwin);
     if (win != XCB_WINDOW_NONE)
         return win;             /* Found a client */
 

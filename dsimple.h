@@ -39,25 +39,23 @@ from The Open Group.
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
 
-typedef enum { False = 0, True } Bool;
-
     /* Global variables used by routines in dsimple.c */
 
 extern const char *program_name;             /* Name of this program */
 
     /* Declarations for functions in dsimple.c */
 
-const char *Get_Display_Name (const char *displayname);
-void Setup_Display_And_Screen (const char *displayname,
+const char *get_display_name (const char *displayname);
+void setup_display_and_screen (const char *displayname,
 			       xcb_connection_t **dpy, xcb_screen_t **screen);
 
-xcb_window_t Select_Window (xcb_connection_t *, const xcb_screen_t *, int);
-xcb_window_t Window_With_Name (xcb_connection_t *, xcb_window_t, const char *);
+xcb_window_t select_window (xcb_connection_t *, const xcb_screen_t *, int);
+xcb_window_t window_with_name (xcb_connection_t *, xcb_window_t, const char *);
 
-void Fatal_Error (const char *, ...) _X_NORETURN _X_ATTRIBUTE_PRINTF(1, 2) _X_COLD;
+void fatal_error (const char *, ...) _X_NORETURN _X_ATTRIBUTE_PRINTF(1, 2) _X_COLD;
 
-void Print_X_Error (xcb_connection_t *, xcb_generic_error_t *);
+void print_x_error (xcb_connection_t *, xcb_generic_error_t *);
 
 struct atom_cache_entry *Intern_Atom (xcb_connection_t *, const char *);
-xcb_atom_t Get_Atom (xcb_connection_t *, const char *);
-const char *Get_Atom_Name (xcb_connection_t *, xcb_atom_t);
+xcb_atom_t get_atom (xcb_connection_t *, const char *);
+const char *get_atom_name (xcb_connection_t *, xcb_atom_t);
