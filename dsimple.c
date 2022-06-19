@@ -303,7 +303,6 @@ recursive_window_with_name  (
     if (w) {
 	xcb_discard_reply (dpy, cookies->get_wm_name.sequence);
     } else {
-#ifdef USE_XCB_ICCCM
 	xcb_icccm_get_text_property_reply_t nameprop;
 
 	if (xcb_icccm_get_wm_name_reply (dpy, cookies->get_wm_name,
@@ -316,23 +315,6 @@ recursive_window_with_name  (
 
 	    xcb_icccm_get_text_property_reply_wipe (&nameprop);
 	}
-#else
-	prop = xcb_get_property_reply (dpy, cookies->get_wm_name, &err);
-
-	if (prop) {
-	    if (prop->type == XCB_ATOM_STRING) {
-		const char *prop_name = xcb_get_property_value (prop);
-		int prop_name_len = xcb_get_property_value_length (prop);
-
-		/* can't use strcmp, since prop.name is not null terminated */
-		if ((namelen == (size_t) prop_name_len) &&
-		    memcmp (prop_name, name, namelen) == 0) {
-		    w = window;
-		}
-	    }
-	    free (prop);
-	}
-#endif
 	else if (err) {
 	    if (err->response_type == 0)
 		print_x_error (dpy, err);

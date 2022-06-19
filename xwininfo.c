@@ -180,30 +180,29 @@ static size_t strlcat (char *dst, const char *src, size_t dstsize)
 static void
 usage (void)
 {
-    fprintf (stderr,
-	     "usage:  %s [-options ...]\n\n"
-	     "where options include:\n"
-	     "    -help                 print this message\n"
-	     "    -version              print version message\n"
-	     "    -d[isplay] <host:dpy> X server to contact\n"
-	     "    -root                 use the root window\n"
-	     "    -id <wdid>            use the window with the specified id\n"
-	     "    -name <wdname>        use the window with the specified name\n"
-	     "    -int                  print window id in decimal\n"
-	     "    -children             print parent and child identifiers\n"
-	     "    -tree                 print children identifiers recursively\n"
-	     "    -stats                print window geometry [DEFAULT]\n"
-	     "    -bits                 print window pixel information\n"
-	     "    -events               print events selected for on window\n"
-	     "    -size                 print size hints\n"
-	     "    -wm                   print window manager hints\n"
-	     "    -shape                print shape extents\n"
-	     "    -frame                don't ignore window manager frames\n"
-	     "    -english              print sizes in english units\n"
-	     "    -metric               print sizes in metric units\n"
-	     "    -all                  -tree, -stats, -bits, -events, -wm, -size, -shape\n"
-	     "\n",
-	     program_name);
+	printf ("usage:  %s [-options ...]\n\n"
+		"where options include:\n"
+		"    -help                 print this message\n"
+		"    -version              print version message\n"
+		"    -d[isplay] <host:dpy> X server to contact\n"
+		"    -root                 use the root window\n"
+		"    -id <wdid>            use the window with the specified id\n"
+		"    -name <wdname>        use the window with the specified name\n"
+		"    -int                  print window id in decimal\n"
+		"    -children             print parent and child identifiers\n"
+		"    -tree                 print children identifiers recursively\n"
+		"    -stats                print window geometry [DEFAULT]\n"
+		"    -bits                 print window pixel information\n"
+		"    -events               print events selected for on window\n"
+		"    -size                 print size hints\n"
+		"    -wm                   print window manager hints\n"
+		"    -shape                print shape extents\n"
+		"    -frame                don't ignore window manager frames\n"
+		"    -english              print sizes in english units\n"
+		"    -metric               print sizes in metric units\n"
+		"    -all                  -tree, -stats, -bits, -events, -wm, -size, -shape\n"
+		"\n",
+		program_name);
 }
 
 /*
@@ -610,37 +609,6 @@ fetch_win_attributes (struct wininfo *w)
     return w->win_attributes;
 }
 
-#ifndef USE_XCB_ICCCM
-static int
-wm_size_hints_reply (xcb_connection_t *wshr_dpy, xcb_get_property_cookie_t cookie,
-		     wm_size_hints_t *hints_return, xcb_generic_error_t **wshr_err)
-{
-    xcb_get_property_reply_t *prop = xcb_get_property_reply (wshr_dpy, cookie, wshr_err);
-    size_t length;
-
-    if (!prop || (prop->type != XCB_ATOM_WM_SIZE_HINTS) ||
-	(prop->format != 32)) {
-	free (prop);
-	return 0;
-    }
-
-    memset (hints_return, 0, sizeof(wm_size_hints_t));
-
-    length = (size_t) xcb_get_property_value_length(prop);
-    if (length > sizeof(wm_size_hints_t))
-	length = sizeof(wm_size_hints_t);
-    memcpy (hints_return, xcb_get_property_value (prop), length);
-
-    free (prop);
-    return 1;
-}
-
-#define xcb_icccm_get_wm_normal_hints_reply wm_size_hints_reply
-#define xcb_icccm_get_wm_size_hints_reply wm_size_hints_reply
-#endif
-
-
-
 /* Ensure normal_hints field is filled in */
 static xcb_size_hints_t *
 fetch_normal_hints (struct wininfo *w, xcb_size_hints_t *hints_return)
@@ -703,10 +671,8 @@ Lookup (int code, const struct binding *table)
 static void
 display_window_id (struct wininfo *w, int newline_wanted)
 {
-#ifdef USE_XCB_ICCCM
     xcb_icccm_get_text_property_reply_t wmn_reply;
     uint8_t got_reply = 0;
-#endif
     xcb_get_property_reply_t *prop;
     const char *wm_name = NULL;
     unsigned int wm_name_len = 0;
@@ -727,7 +693,6 @@ display_window_id (struct wininfo *w, int newline_wanted)
 	    wm_name_len = xcb_get_property_value_length (prop);
 	    wm_name_encoding = prop->type;
 	} else { /* No _NET_WM_NAME, check WM_NAME */
-#ifdef USE_XCB_ICCCM
 	    got_reply = xcb_icccm_get_wm_name_reply (dpy, w->wm_name_cookie,
 						     &wmn_reply, NULL);
 	    if (got_reply) {
@@ -735,14 +700,6 @@ display_window_id (struct wininfo *w, int newline_wanted)
 		wm_name_len = wmn_reply.name_len;
 		wm_name_encoding = wmn_reply.encoding;
 	    }
-#else
-	    prop = xcb_get_property_reply (dpy, w->wm_name_cookie, NULL);
-	    if (prop && (prop->type != XCB_NONE)) {
-		wm_name = xcb_get_property_value (prop);
-		wm_name_len = xcb_get_property_value_length (prop);
-		wm_name_encoding = prop->type;
-	    }
-#endif
 	}
 	if (wm_name_len == 0) {
 	    printf (" (has no name)");
@@ -762,12 +719,8 @@ display_window_id (struct wininfo *w, int newline_wanted)
 		}
 	    }
 	}
-#ifdef USE_XCB_ICCCM
 	if (got_reply)
 	    xcb_icccm_get_text_property_reply_wipe (&wmn_reply);
-#else
-	free (prop);
-#endif
     }
 
     if (newline_wanted)
@@ -1244,11 +1197,7 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
 	    int got_wm_class = 0;
 	    char *instance_name = NULL, *class_name = NULL;
 	    int instance_name_len, class_name_len;
-#ifdef USE_XCB_ICCCM
 	    xcb_icccm_get_wm_class_reply_t classhint;
-#else
-	    xcb_get_property_reply_t *classprop;
-#endif
 	    xcb_get_geometry_reply_t *geometry;
 
 	    printf ("     ");
@@ -1256,7 +1205,6 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
 	    display_window_id (cw, 0);
 	    printf (": (");
 
-#ifdef USE_XCB_ICCCM
 	    if (xcb_icccm_get_wm_class_reply (dpy, cw->wm_class_cookie,
 					&classhint, NULL)) {
 		got_wm_class = 1;
@@ -1265,28 +1213,6 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
 		instance_name_len = strlen(instance_name);
 		class_name_len = strlen(class_name);
 	    }
-#else
-	    classprop = xcb_get_property_reply
-		(dpy, cw->wm_class_cookie, NULL);
-	    if (classprop) {
-		if (classprop->type == XCB_ATOM_STRING &&
-		    classprop->format == 8) {
-		    int proplen = xcb_get_property_value_length (classprop);
-
-		    instance_name = xcb_get_property_value (classprop);
-		    instance_name_len = strnlen (instance_name, proplen);
-		    if (instance_name_len < proplen) {
-			class_name = instance_name + instance_name_len + 1;
-			class_name_len = strnlen
-			    (class_name, proplen - (instance_name_len + 1));
-		    } else
-			class_name_len = 0;
-		    got_wm_class = 1;
-		}
-		else
-		    free (classprop);
-	    }
-#endif
 
 	    if (got_wm_class) {
 		if (instance_name)
@@ -1299,11 +1225,7 @@ display_tree_info_1 (struct wininfo *w, int recurse, int level)
 		else
 		    printf ("(none)) ");
 
-#ifdef USE_XCB_ICCCM
 		xcb_icccm_get_wm_class_reply_wipe (&classhint);
-#else
-		free (classprop);
-#endif
 	    } else
 		printf (") ");
 
@@ -1513,33 +1435,6 @@ static const struct binding _state_hints[] = {
 /* xwininfo previously also reported the ZoomState & InactiveState,
    but ICCCM declared those obsolete long ago */
 	{ 0, NULL } };
-
-#ifndef USE_XCB_ICCCM
-static int
-wm_hints_reply (xcb_connection_t *whr_dpy, xcb_get_property_cookie_t cookie,
-		wm_hints_t *hints_return, xcb_generic_error_t **whr_err)
-{
-    xcb_get_property_reply_t *prop = xcb_get_property_reply (whr_dpy, cookie, whr_err);
-    size_t length;
-
-    if (!prop || (prop->type != XCB_ATOM_WM_HINTS) || (prop->format != 32)) {
-	free (prop);
-	return 0;
-    }
-
-    memset (hints_return, 0, sizeof(wm_hints_t));
-
-    length = (size_t) xcb_get_property_value_length(prop);
-    if (length > sizeof(wm_hints_t))
-	length = sizeof(wm_hints_t);
-    memcpy (hints_return, xcb_get_property_value (prop), length);
-
-    free (prop);
-    return 1;
-}
-
-#define xcb_icccm_get_wm_hints_reply wm_hints_reply
-#endif
 
 static void
 Display_Atom_Name (xcb_atom_t atom, const char *prefix)
